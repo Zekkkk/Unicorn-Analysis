@@ -83,7 +83,7 @@ Set the PostgreSQL connection string before running migration or validation.
 Example for the local PostgreSQL setup:
 
 ```bash
-export POSTGRES_DSN="postgresql://postgres:YOUR_PASSWORD@localhost:5433/unicorn_analysis"
+export POSTGRES_DSN="postgresql://postgres:3452@localhost:5433/unicorn_analysis"
 ```
 
 Do not commit real passwords.
