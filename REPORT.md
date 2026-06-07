@@ -2,15 +2,29 @@
 
 ## Introduction
 
-This project demonstrates a relational-to-NoSQL migration pipeline for global unicorn startup data. The goal is to show how data can be modeled in a relational database, migrated into a document database with transformations, validated after migration, and visualized from the NoSQL side.
+This project demonstrates an end-to-end migration from a relational database to a NoSQL database. The dataset contains global unicorn startup companies, meaning private companies valued at one billion dollars or more. The final pipeline starts with a CSV file, loads and normalizes it in PostgreSQL, migrates it into MongoDB as denormalized documents, validates the result, and generates visualizations from MongoDB.
 
-The source dataset is `data/Unicorn_Companies.csv`. The final analysis is based on MongoDB documents produced from PostgreSQL, not directly from the CSV.
+The project was originally a MongoDB analysis project, but it was redesigned to satisfy the course objective: demonstrate relational modeling, NoSQL modeling, programmatic migration, transformation, validation, and visualization.
+
+## Why This Project Was Chosen
+
+Unicorn company data is a good fit for this assignment because it has natural relationships and useful analysis dimensions. A company belongs to a country, city, and industry. A company can also have many investors, and the same investor can appear in many companies. This makes the dataset suitable for relational modeling with multiple joinable tables.
+
+At the same time, the final analysis is company-centered. Most useful questions ask about each company together with its valuation, industry, location, founding year, date joined, and investors. That makes the dataset suitable for MongoDB after migration because the related data can be embedded into one company document.
+
+The topic is also easy to explain in a presentation because the business meaning is clear: where unicorns are located, which industries produce the most unicorns, how quickly companies reach unicorn status, and which companies have the highest valuations.
 
 ## Relational Database Design
 
 The relational source database is PostgreSQL. The database is named `unicorn_analysis`.
 
-The raw CSV is first imported into `staging_unicorn_companies`. From there, the data is normalized into these tables:
+The CSV is first imported into a staging table:
+
+```text
+staging_unicorn_companies
+```
+
+The staging table stores the raw CSV fields as text so the original import is simple and recoverable. After import, the data is normalized into these relational tables:
 
 ```text
 countries
@@ -21,41 +35,42 @@ investors
 company_investors
 ```
 
-The `companies` table stores the main company facts, including valuation, date joined, founded year, and source investor count. `countries`, `cities`, and `industries` remove repeated text values into lookup tables. `investors` stores unique investor names. `company_investors` models the many-to-many relationship between companies and investors.
+The `companies` table is the main entity table. It stores company name, valuation, date joined, founded year, total raised, financial stage, investor count, deal terms, portfolio exits, and foreign keys to country, city, and industry.
 
-The schema uses primary keys, foreign keys, unique constraints, `NOT NULL` constraints, and `CHECK` constraints. The ERD is saved at:
+The `countries`, `cities`, and `industries` tables remove repeated text values and make the schema cleaner. The `investors` table stores unique investor names. The `company_investors` table is a junction table that handles the many-to-many relationship between companies and investors.
 
-```text
-outputs/relational_erd.png
-```
+The schema includes primary keys, foreign keys, unique constraints, `NOT NULL` constraints, and `CHECK` constraints. Examples include a check that valuation is at least one billion and a check that investor count cannot be negative.
 
-Relational population and join evidence are saved at:
-
-```text
-outputs/relational_table_counts.png
-outputs/relational_join_query.png
-```
-
-The SQL files are:
+Schema files:
 
 ```text
 sql/01_schema.sql
 sql/02_populate_relational_tables.sql
 ```
 
+Evidence files:
+
+```text
+outputs/relational_erd.png
+outputs/relational_table_counts.png
+outputs/relational_join_query.png
+```
+
+The PostgreSQL population produced 1,035 company records after normalization.
+
 ## Choice of NoSQL Database
 
-MongoDB was selected because the analysis is company-centered. Each chart and query usually needs the company, valuation, location, industry, and investor data together. A document model fits this access pattern because those related attributes can be embedded in one company document.
+MongoDB was chosen as the NoSQL target because the final access pattern is document-oriented and company-centered. Each analysis needs company data together with location, industry, valuation, and investors. MongoDB allows those related fields to be stored together in a single document, which avoids repeated joins during analysis and visualization.
 
-Redis was considered as a key-value alternative. It would be useful for fast lookups or caching specific company records, but it is less natural for ad hoc analytical queries, grouped aggregations, and nested company documents.
+Redis was considered as a key-value alternative. It would be useful for fast lookups or caching a company by key, but it is not as natural for grouped analytical queries, nested data, or chart generation.
 
-Neo4j was considered as a graph alternative. It would model companies, investors, countries, and industries as connected nodes, which is useful for relationship exploration. However, the project's main workload is aggregate analysis and charting, not deep graph traversal.
+Neo4j was considered as a graph alternative. It would model companies, investors, countries, and industries as connected nodes, which would be useful for exploring investor networks. However, this project focuses more on aggregate analytics than graph traversal.
 
-Cassandra was also considered as a column-family alternative. It can scale large write-heavy workloads, but it requires query-first table design and is more complex than needed for this dataset and local demonstration.
+Cassandra was considered as a column-family alternative. It is strong for large-scale distributed writes and query-specific table design, but it is more complex than necessary for this local migration and visualization project.
 
-MongoDB provides the best balance for this project: flexible documents, embedded related data, aggregation support, and simple local setup.
+MongoDB was the best fit because it supports flexible documents, embedded arrays, aggregation queries, and simple local development.
 
-## NoSQL Data Model
+## MongoDB Data Model
 
 The MongoDB target is:
 
@@ -64,7 +79,7 @@ Database: unicorn_db
 Collection: companies_migrated
 ```
 
-Each MongoDB document represents one company. The relational model is mapped into a denormalized document structure:
+Each document represents one company. The relational tables are mapped into a denormalized document structure:
 
 ```text
 postgres_company_id
@@ -87,7 +102,9 @@ deal_terms
 portfolio_exits
 ```
 
-Location and industry are embedded because the visualizations group directly by country and industry. Investors are embedded as an array because the project needs company-centered analysis and the investor names are usually read together with each company.
+Country and city are embedded under `location` because location is usually read together with the company. Industry is embedded because most charts group companies by industry. Investors are embedded as an array because the visualization and company-level analysis do not require separate investor updates.
+
+This is a deliberate denormalization step. PostgreSQL stores normalized relational data; MongoDB stores analysis-ready company documents.
 
 ## Migration Process
 
@@ -97,9 +114,15 @@ The migration script is:
 scripts/05_migrate_postgres_to_mongo.py
 ```
 
-It connects to PostgreSQL using `POSTGRES_DSN` and to MongoDB using `MONGO_URI`, which defaults to `mongodb://localhost:27017/`.
+The script connects to PostgreSQL using `POSTGRES_DSN` and connects to MongoDB using `MONGO_URI`, which defaults to:
 
-The script joins the normalized relational tables and writes one document per company into MongoDB. It computes derived fields during migration:
+```text
+mongodb://localhost:27017/
+```
+
+The migration joins the normalized PostgreSQL tables and creates one MongoDB document per company. It is not a one-to-one table copy. It transforms the relational data by embedding related values and computing derived fields.
+
+Derived fields include:
 
 ```text
 year_joined
@@ -108,15 +131,15 @@ valuation_tier
 investor_count_actual
 ```
 
-The migration is idempotent. It uses `postgres_company_id` as the unique upsert key with MongoDB `replace_one(..., upsert=True)`. Running the script twice updates existing documents instead of duplicating them.
+The script is idempotent. It uses `postgres_company_id` as the unique upsert key and writes documents with MongoDB `replace_one(..., upsert=True)`. Running the migration multiple times updates the same documents instead of creating duplicates.
 
-The latest migration log is saved at:
+The latest migration output is saved in:
 
 ```text
 outputs/migration.log
 ```
 
-## Validation
+## Validation Results
 
 The validation script is:
 
@@ -124,7 +147,7 @@ The validation script is:
 scripts/06_validate_migration.py
 ```
 
-It compares PostgreSQL and MongoDB using:
+The script compares PostgreSQL and MongoDB using several checks:
 
 ```text
 record count
@@ -134,7 +157,7 @@ industry aggregate counts
 top valuation spot check
 ```
 
-The validation result is saved at:
+The validation report is saved at:
 
 ```text
 outputs/validation_report.txt
@@ -147,9 +170,12 @@ PostgreSQL count: 1035
 MongoDB count: 1035
 Country aggregate: 46 groups match
 Industry aggregate: 33 groups match
+Top valuation spot check: passed
 ```
 
-## Visualization Layer
+This proves that the migrated MongoDB collection matches the PostgreSQL source for the selected validation fields and aggregate queries.
+
+## Visualization Results
 
 The visualization script is:
 
@@ -174,10 +200,10 @@ outputs/charts/05_valuation_distribution.png
 outputs/charts/06_top_valued.png
 ```
 
-The charts use migrated and derived MongoDB fields such as `industry.name`, `location.country`, `year_joined`, `years_to_unicorn`, and `valuation_b`.
+The visualizations use migrated MongoDB fields such as `industry.name`, `location.country`, `year_joined`, `years_to_unicorn`, and `valuation_b`. This proves that the migrated NoSQL collection is usable for analysis.
 
 ## Conclusion
 
-The project now demonstrates an end-to-end database migration workflow. PostgreSQL is used for normalized relational modeling with constraints and relationships. MongoDB is used for denormalized analytical documents. Python scripts handle migration, transformation, validation, and visualization.
+This project demonstrates relational modeling, NoSQL modeling, programmatic migration, transformation, validation, and visualization. PostgreSQL is used to show normalized relational structure and constraints. MongoDB is used to show denormalized document modeling for analysis. Python connects the two systems and validates the migration.
 
-The main known limitation is dataset size. The available CSV contains 1,037 rows, and the normalized migration produces 1,035 company records. Therefore, the requirement for one relational table with 10,000 or more records is not satisfied in this version.
+The main limitation is dataset size. The available CSV contains 1,037 rows, and the normalized relational migration produces 1,035 company records. The course requirement for one table with 10,000 or more records is not satisfied in this version. This limitation is documented honestly, while the rest of the migration pipeline is complete and working.

@@ -1,119 +1,68 @@
 # Unicorn Analysis
 
-University data engineering project by Fortan Zaimi and Zeqirija Osmani.
+Runbook for the Unicorn Analysis PostgreSQL-to-MongoDB migration project.
 
-This project demonstrates a relational-to-NoSQL migration pipeline using a real-world unicorn startup dataset. The source data starts as `data/Unicorn_Companies.csv`, is loaded into a normalized PostgreSQL relational schema, migrated into MongoDB as denormalized company documents, validated with automated checks, and visualized from the MongoDB side.
+## Prerequisites
 
-## Project Structure
+- Python 3.12+
+- PostgreSQL running locally
+- MongoDB running locally or in Docker
+- pgAdmin for manual PostgreSQL import/ERD screenshots
 
-```text
-unicorn-analysis/
-├── data/
-│   └── Unicorn_Companies.csv
-├── sql/
-│   ├── 01_schema.sql
-│   └── 02_populate_relational_tables.sql
-├── scripts/
-│   ├── 01_ingest.py
-│   ├── 02_clean.py
-│   ├── 03_queries.py
-│   ├── 04_visualize.py
-│   ├── 05_migrate_postgres_to_mongo.py
-│   └── 06_validate_migration.py
-├── outputs/
-│   ├── charts/
-│   ├── relational_erd.png
-│   ├── relational_table_counts.png
-│   ├── relational_join_query.png
-│   ├── migration.log
-│   └── validation_report.txt
-├── notebooks/
-│   └── analysis.ipynb
-├── REPORT.md
-├── requirements.txt
-└── README.md
-```
-
-## Setup
-
-Create and activate a virtual environment:
+## Install Dependencies
 
 ```bash
+cd /Users/zekoosmani/Unicorn-Analysis
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
 pip install -r requirements.txt
 ```
 
-Start MongoDB with Docker:
+## Start MongoDB
 
-```bash
-docker run --name unicorn-mongo -p 27017:27017 -d mongo:latest
-```
-
-If the container already exists:
+If the MongoDB Docker container already exists:
 
 ```bash
 docker start unicorn-mongo
 ```
 
-MongoDB defaults to:
+If it does not exist:
+
+```bash
+docker run --name unicorn-mongo -p 27017:27017 -d mongo:latest
+```
+
+Default MongoDB connection:
 
 ```text
 mongodb://localhost:27017/
 ```
 
-PostgreSQL is expected to contain a database named:
+## PostgreSQL Setup
+
+Create a PostgreSQL database named:
 
 ```text
 unicorn_analysis
 ```
 
-In the local development setup used for this project, PostgreSQL runs on port `5433`. Pass the PostgreSQL connection string through `POSTGRES_DSN`. Do not commit database passwords.
-
-Example:
-
-```bash
-export POSTGRES_DSN="postgresql://postgres:YOUR_PASSWORD@localhost:5433/unicorn_analysis"
-```
-
-## PostgreSQL Relational Setup
-
-Create the PostgreSQL database in pgAdmin:
-
-```sql
-CREATE DATABASE unicorn_analysis;
-```
-
-Open the `unicorn_analysis` database in pgAdmin Query Tool and run:
+In pgAdmin, open Query Tool for `unicorn_analysis` and run:
 
 ```text
 sql/01_schema.sql
 ```
 
-This creates the staging table and normalized relational tables:
+Import the CSV into the staging table:
 
 ```text
-staging_unicorn_companies
-countries
-cities
-industries
-companies
-investors
-company_investors
+Table: staging_unicorn_companies
+File: data/Unicorn_Companies.csv
+Format: CSV
+Header: Yes
+Delimiter: ,
+Quote: "
+Escape: "
 ```
-
-Import the CSV into `staging_unicorn_companies` using pgAdmin Import/Export:
-
-```text
-data/Unicorn_Companies.csv
-```
-
-Use CSV format with header enabled.
 
 Then run:
 
@@ -121,88 +70,97 @@ Then run:
 sql/02_populate_relational_tables.sql
 ```
 
-This normalizes the staging data into the relational schema and includes count and join queries for evidence.
-
-Relational evidence is saved in:
+The expected final `companies` table count is:
 
 ```text
-outputs/relational_erd.png
-outputs/relational_table_counts.png
-outputs/relational_join_query.png
+1035
 ```
 
-## Migration to MongoDB
+## Environment Variables
 
-Run the PostgreSQL-to-MongoDB migration:
+Set the PostgreSQL connection string before running migration or validation.
+
+Example for the local PostgreSQL setup:
 
 ```bash
-POSTGRES_DSN="postgresql://postgres:YOUR_PASSWORD@localhost:5433/unicorn_analysis" python3 scripts/05_migrate_postgres_to_mongo.py
+export POSTGRES_DSN="postgresql://postgres:YOUR_PASSWORD@localhost:5433/unicorn_analysis"
 ```
 
-The migration reads the normalized PostgreSQL tables and writes denormalized documents to:
+Do not commit real passwords.
+
+Optional MongoDB override:
+
+```bash
+export MONGO_URI="mongodb://localhost:27017/"
+```
+
+## Run Migration
+
+```bash
+python3 scripts/05_migrate_postgres_to_mongo.py
+```
+
+Expected result:
 
 ```text
-MongoDB database: unicorn_db
-MongoDB collection: companies_migrated
+Fetched 1035 company rows from PostgreSQL.
+Migration complete.
+MongoDB unicorn_db.companies_migrated document count: 1035
 ```
 
-The migrated documents embed location, industry, and investor data, and include derived fields such as:
+Run the migration a second time to prove idempotency:
+
+```bash
+python3 scripts/05_migrate_postgres_to_mongo.py
+```
+
+Expected second-run behavior:
 
 ```text
-year_joined
-years_to_unicorn
-valuation_tier
-investor_count_actual
+Inserted new documents: 0
+MongoDB unicorn_db.companies_migrated document count: 1035
 ```
 
-The migration is idempotent. It uses `postgres_company_id` as the upsert key, so running the script repeatedly does not duplicate documents.
-
-Migration output is logged to:
+Migration log:
 
 ```text
 outputs/migration.log
 ```
 
-## Validation
-
-Run the automated validation layer:
+## Run Validation
 
 ```bash
-POSTGRES_DSN="postgresql://postgres:YOUR_PASSWORD@localhost:5433/unicorn_analysis" python3 scripts/06_validate_migration.py
+python3 scripts/06_validate_migration.py
 ```
-
-The validation compares PostgreSQL and MongoDB using:
-
-- record counts
-- SHA-256 checksum over key fields
-- country-level aggregates
-- industry-level aggregates
-- top valuation spot checks
 
 Expected result:
 
 ```text
+[PASS] Record count
+[PASS] Key-field checksum
+[PASS] Country aggregate
+[PASS] Industry aggregate
+[PASS] Top valuation spot check
 Validation passed: all checks passed.
 ```
 
-The validation report is saved to:
+Validation report:
 
 ```text
 outputs/validation_report.txt
 ```
 
-## Visualization
-
-Generate charts from MongoDB:
+## Generate Visualizations
 
 ```bash
 python3 scripts/04_visualize.py
 ```
 
-The visualization reads exclusively from:
+The visualization reads from:
 
 ```text
-unicorn_db.companies_migrated
+MongoDB database: unicorn_db
+MongoDB collection: companies_migrated
 ```
 
 Generated charts:
@@ -216,9 +174,21 @@ outputs/charts/05_valuation_distribution.png
 outputs/charts/06_top_valued.png
 ```
 
+## Evidence Files
+
+```text
+outputs/relational_erd.png
+outputs/relational_table_counts.png
+outputs/relational_join_query.png
+outputs/migration.log
+outputs/validation_report.txt
+outputs/charts/
+REPORT.md
+```
+
 ## Legacy Scripts
 
-The original CSV-to-MongoDB workflow is still present for reference:
+These scripts are kept from the original MongoDB-only version for reference:
 
 ```text
 scripts/01_ingest.py
@@ -226,8 +196,12 @@ scripts/02_clean.py
 scripts/03_queries.py
 ```
 
-The course-compliant pipeline is the PostgreSQL-to-MongoDB workflow using `sql/`, `scripts/05_migrate_postgres_to_mongo.py`, `scripts/06_validate_migration.py`, and `scripts/04_visualize.py`.
+The final course pipeline uses:
 
-## Known Limitation
-
-The dataset contains 1,037 CSV rows, and the relational migration produces 1,035 company records after normalization. The course requirement for one table with 10,000 or more records is not satisfied in this version.
+```text
+sql/01_schema.sql
+sql/02_populate_relational_tables.sql
+scripts/05_migrate_postgres_to_mongo.py
+scripts/06_validate_migration.py
+scripts/04_visualize.py
+```
