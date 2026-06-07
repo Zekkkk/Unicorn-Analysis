@@ -12,9 +12,9 @@ from pymongo.errors import PyMongoError, ServerSelectionTimeoutError
 import seaborn as sns
 
 
-MONGO_URI = "mongodb://localhost:27017/"
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
 DB_NAME = "unicorn_db"
-CLEAN_COLLECTION = "companies_clean"
+MIGRATED_COLLECTION = "companies_migrated"
 CHART_DIR = ROOT_DIR / "outputs" / "charts"
 
 
@@ -26,20 +26,23 @@ def connect_to_mongo() -> MongoClient:
     return client
 
 
-def load_clean_data() -> pd.DataFrame:
+def load_migrated_data() -> pd.DataFrame:
     client = connect_to_mongo()
-    collection = client[DB_NAME][CLEAN_COLLECTION]
+    collection = client[DB_NAME][MIGRATED_COLLECTION]
     docs = list(collection.find({}, {"_id": 0}))
     client.close()
 
     if not docs:
         raise ValueError(
-            f"No documents found in {DB_NAME}.{CLEAN_COLLECTION}. "
-            "Run scripts/01_ingest.py and scripts/02_clean.py first."
+            f"No documents found in {DB_NAME}.{MIGRATED_COLLECTION}. "
+            "Run scripts/05_migrate_postgres_to_mongo.py first."
         )
 
     df = pd.DataFrame(docs)
-    print(f"Loaded {len(df):,} clean rows for visualization.")
+    df["country"] = df["location"].apply(lambda value: (value or {}).get("country"))
+    df["city"] = df["location"].apply(lambda value: (value or {}).get("city"))
+    df["industry"] = df["industry"].apply(lambda value: (value or {}).get("name"))
+    print(f"Loaded {len(df):,} migrated rows for visualization.")
     return df
 
 
@@ -147,7 +150,7 @@ def main() -> int:
     try:
         print("Generating unicorn analysis charts.")
         sns.set_theme(style="whitegrid")
-        df = load_clean_data()
+        df = load_migrated_data()
 
         plot_industry_count(df)
         plot_country_count(df)
