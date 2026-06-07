@@ -1,0 +1,13 @@
+Migration Validation Report
+===========================
+PostgreSQL source: companies
+MongoDB target: unicorn_db.companies_migrated
+
+[PASS] Record count: PostgreSQL=1035, MongoDB=1035
+[PASS] Key-field checksum: PostgreSQL=813fb182313adbdf0a0941b841c61664bb764b9115bb6fa9dc64ec49e417667f, MongoDB=813fb182313adbdf0a0941b841c61664bb764b9115bb6fa9dc64ec49e417667f
+[PASS] Country aggregate: 46 groups match
+[PASS] Industry aggregate: 33 groups match
+[PASS] Top valuation spot check: PostgreSQL=[('Bytedance', '140.00'), ('SpaceX', '100.30'), ('Stripe', '95.00'), ('Klarna', '45.60'), ('Epic Games', '42.00'), ('Canva', '40.00'), ('Checkout.com', '40.00'), ('Instacart', '39.00'), ('Databricks', '38.00'), ('Revolut', '33.00')], MongoDB=[('Bytedance', '140.00'), ('SpaceX', '100.30'), ('Stripe', '95.00'), ('Klarna', '45.60'), ('Epic Games', '42.00'), ('Canva', '40.00'), ('Checkout.com', '40.00'), ('Instacart', '39.00'), ('Databricks', '38.00'), ('Revolut', '33.00')]
+
+Validation passed: all checks passed.
+Report written to /Users/zekoosmani/Unicorn-Analysis/outputs/validation_report.txt

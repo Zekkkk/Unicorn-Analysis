@@ -1,0 +1,12 @@
+2026-06-07 14:42:39,956 INFO Connecting to PostgreSQL.
+2026-06-07 14:42:39,965 INFO PostgreSQL connection successful.
+2026-06-07 14:42:39,965 INFO Connecting to MongoDB at mongodb://localhost:27017/.
+2026-06-07 14:42:39,970 INFO MongoDB connection successful.
+2026-06-07 14:42:39,995 INFO Fetched 1035 company rows from PostgreSQL.
+2026-06-07 14:42:40,065 INFO Migration complete.
+2026-06-07 14:42:40,066 INFO Matched existing documents: 1035
+2026-06-07 14:42:40,066 INFO Inserted new documents: 0
+2026-06-07 14:42:40,066 INFO Modified documents: 1035
+2026-06-07 14:42:40,066 INFO Skipped source rows: 0
+2026-06-07 14:42:40,066 INFO MongoDB unicorn_db.companies_migrated document count: 1035
+2026-06-07 14:42:40,066 INFO Migration log written to /Users/zekoosmani/Unicorn-Analysis/outputs/migration.log

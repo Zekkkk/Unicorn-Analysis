@@ -1,5 +1,6 @@
 pandas
 pymongo
+psycopg[binary]
 matplotlib
 seaborn
 jupyter
